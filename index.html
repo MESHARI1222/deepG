@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>deepG | محرك البحث الذكي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap');
+        body {
+            font-family: 'Tajawal', sans-serif;
+            background-color: #f8fafc;
+        }
+        .loader-ring {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #2563eb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .answer-area p { margin-bottom: 1rem; line-height: 1.8; }
+        .answer-area strong { color: #1e40af; }
+        .source-card:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+    </style>
+</head>
+<body class="text-slate-900 transition-colors duration-500">
+
+<!-- Chosen Palette: Deep Ocean (Blue-600) & Pure Snow (White) -->
+<!-- Application Structure Plan: 
+     - تصميم الصفحة الرئيسية بأسلوب "البحث الفائق" لعام 2026.
+     - ربط حقيقي بـ API الخاص بـ Gemini 2.5 Flash مع تفعيل خاصية "Google Search" لجلب معلومات حية.
+     - عرض النتائج في قسمين: (1) الإجابة المولدة بالذكاء الاصطناعي، (2) قائمة المصادر الحقيقية كروابط قابلة للنقر.
+     - إضافة نظام معالجة الأخطاء الذكي (Exponential Backoff) لضمان عدم فشل الطلبات. -->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <!-- Home View -->
+    <div id="home-view" class="min-h-screen flex flex-col items-center justify-center p-6 transition-all duration-700">
+        <div class="mb-12 text-center scale-up">
+            <h1 class="text-8xl md:text-[10rem] font-black tracking-tighter mb-4 leading-none">
+                <span class="text-blue-600">deep</span><span class="text-slate-800">G</span>
+            </h1>
+            <p class="text-slate-400 font-bold tracking-[0.4em] uppercase text-xs">مستقبل المعرفة الرقمية • 2026</p>
+        </div>
+
+        <div class="w-full max-w-2xl relative">
+            <input type="text" id="home-input" 
+                class="w-full py-6 px-10 pr-16 text-xl rounded-3xl border border-slate-200 shadow-2xl focus:outline-none focus:ring-4 focus:ring-blue-100 transition-all placeholder:text-slate-300"
+                placeholder="ابحث عن أي شيء في الويب..."
+                onkeypress="if(event.key === 'Enter') executeSearch('home-input')">
+            <button onclick="executeSearch('home-input')" class="absolute right-4 top-1/2 -translate-y-1/2 bg-blue-600 text-white w-12 h-12 rounded-2xl flex items-center justify-center hover:bg-blue-700 transition-all">
+                🔍
+            </button>
+        </div>
+
+        <div class="mt-12 flex gap-4 text-sm text-slate-500">
+            <span>رائج الآن:</span>
+            <button onclick="quickLink('تطور الطاقة المتجددة 2026')" class="hover:text-blue-600 underline">الطاقة المتجددة</button>
+            <button onclick="quickLink('أخبار كأس العالم القادم')" class="hover:text-blue-600 underline">الرياضة</button>
+        </div>
+    </div>
+
+    <!-- Results View (Hidden) -->
+    <div id="results-view" class="hidden min-h-screen">
+        <header class="sticky top-0 bg-white/80 backdrop-blur-xl border-b border-slate-100 z-50 py-4 px-6 flex items-center justify-between">
+            <div class="text-3xl font-black cursor-pointer" onclick="location.reload()">
+                <span class="text-blue-600">deep</span><span class="text-slate-800">G</span>
+            </div>
+            <div class="flex-1 max-w-3xl mx-8 relative">
+                <input type="text" id="nav-input" class="w-full bg-slate-100 border-none rounded-2xl py-3 px-6 pr-14 outline-none focus:ring-2 focus:ring-blue-500 transition-all" placeholder="بحث جديد...">
+                <button onclick="executeSearch('nav-input')" class="absolute right-4 top-1/2 -translate-y-1/2 text-blue-600 text-xl font-bold">↵</button>
+            </div>
+            <div class="hidden md:flex gap-2">
+                <span class="px-3 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full">API: ONLINE</span>
+            </div>
+        </header>
+
+        <main class="max-w-5xl mx-auto p-6 pt-12">
+            <!-- Loader -->
+            <div id="search-loader" class="hidden py-32 text-center space-y-6">
+                <div class="loader-ring"></div>
+                <p class="text-slate-500 font-medium text-lg animate-pulse">يتم الآن الاتصال بـ deepG API وجلب المصادر الحية...</p>
+            </div>
+
+            <!-- Content Area -->
+            <div id="search-content" class="hidden space-y-12">
+                <!-- AI Smart Answer -->
+                <section class="bg-white border border-blue-50 rounded-[2.5rem] p-10 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-2 h-full bg-blue-600"></div>
+                    <div class="flex items-center gap-3 mb-8">
+                        <span class="bg-blue-100 text-blue-600 p-2 rounded-xl">✨</span>
+                        <h2 class="text-3xl font-bold text-slate-800">تحليل deepG</h2>
+                    </div>
+                    <div id="answer-box" class="text-slate-700 text-lg leading-relaxed answer-area">
+                        <!-- Content -->
+                    </div>
+                </section>
+
+                <!-- Real Sources Grid -->
+                <section>
+                    <h3 class="text-2xl font-bold text-slate-800 mb-8 flex items-center gap-3 pr-4">
+                        <span class="w-3 h-8 bg-blue-600 rounded-full"></span>
+                        المصادر الحقيقية (Real-time Sources)
+                    </h3>
+                    <div id="sources-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Links -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Error State -->
+            <div id="search-error" class="hidden py-20 text-center bg-red-50 rounded-[2.5rem] border border-red-100 p-10">
+                <p class="text-red-700 font-bold text-xl mb-4">تعذر الاتصال بالخادم الرئيسي</p>
+                <p class="text-red-500 text-sm mb-8">يرجى التحقق من اتصالك بالإنترنت أو المحاولة لاحقاً. (Error: API_TIMEOUT_2026)</p>
+                <button onclick="location.reload()" class="bg-red-600 text-white px-10 py-3 rounded-2xl hover:bg-red-700 transition-all">العودة للرئيسية</button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // API Configuration
+        const apiKey = ""; // سيتم تعبئته تلقائياً من بيئة التشغيل
+        const MODEL_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent";
+
+        async function executeSearch(inputId) {
+            const query = document.getElementById(inputId).value.trim();
+            if (!query) return;
+
+            // UI Transitions
+            document.getElementById('home-view').classList.add('hidden');
+            document.getElementById('results-view').classList.remove('hidden');
+            document.getElementById('nav-input').value = query;
+
+            showState('loader');
+
+            try {
+                const response = await fetchWithRetry(`${MODEL_URL}?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: query }] }],
+                        systemInstruction: { parts: [{ text: "أنت محرك بحث متطور يسمى deepG في عام 2026. قم بالبحث في الويب وتقديم إجابة شاملة بالعربية مع ذكر المصادر الحقيقية." }] },
+                        tools: [{ "google_search": {} }]
+                    })
+                });
+
+                const data = await response.json();
+                renderData(data);
+            } catch (err) {
+                console.error("API Error:", err);
+                showState('error');
+            }
+        }
+
+        function renderData(data) {
+            const candidate = data.candidates?.[0];
+            const text = candidate?.content?.parts?.[0]?.text || "لا توجد نتائج لهذا الاستعلام حالياً.";
+            const attributions = candidate?.groundingMetadata?.groundingAttributions || [];
+
+            // Answer rendering
+            document.getElementById('answer-box').innerHTML = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+
+            // Sources rendering
+            const grid = document.getElementById('sources-grid');
+            grid.innerHTML = '';
+
+            if (attributions.length > 0) {
+                attributions.forEach(attr => {
+                    if (attr.web) {
+                        const domain = new URL(attr.web.uri).hostname;
+                        grid.innerHTML += `
+                            <a href="${attr.web.uri}" target="_blank" class="source-card block p-6 bg-white border border-slate-100 rounded-3xl transition-all group">
+                                <div class="flex flex-col h-full justify-between">
+                                    <div>
+                                        <h4 class="font-bold text-slate-800 group-hover:text-blue-600 transition-colors mb-2 line-clamp-2">${attr.web.title}</h4>
+                                        <p class="text-xs text-slate-400 font-mono">${domain}</p>
+                                    </div>
+                                    <div class="mt-4 text-blue-500 font-bold text-sm flex items-center gap-2">
+                                        زيارة المصدر <span>→</span>
+                                    </div>
+                                </div>
+                            </a>
+                        `;
+                    }
+                });
+            } else {
+                grid.innerHTML = `<div class="col-span-full p-10 bg-slate-50 border border-slate-100 rounded-3xl text-slate-400 text-center">لم يتم استخراج روابط خارجية مباشرة، تم التوليد بناءً على المعرفة العامة.</div>`;
+            }
+
+            showState('content');
+        }
+
+        function showState(s) {
+            document.getElementById('search-loader').classList.toggle('hidden', s !== 'loader');
+            document.getElementById('search-content').classList.toggle('hidden', s !== 'content');
+            document.getElementById('search-error').classList.toggle('hidden', s !== 'error');
+        }
+
+        async function fetchWithRetry(url, options, maxRetries = 5) {
+            const delays = [1000, 2000, 4000, 8000, 16000];
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.ok) return response;
+                    if (response.status === 429) throw new Error('Rate Limit');
+                } catch (err) {
+                    if (i === maxRetries - 1) throw err;
+                    await new Promise(r => setTimeout(r, delays[i]));
+                }
+            }
+            throw new Error('All retries failed');
+        }
+
+        function quickLink(q) {
+            document.getElementById('home-input').value = q;
+            executeSearch('home-input');
+        }
+
+        window.onload = () => { document.getElementById('home-input').focus(); };
+    </script>
+</body>
+</html>
